@@ -1,0 +1,28 @@
+{
+  "name": "timesheet-api-server",
+  "version": "1.0.0",
+  "description": "Agilit-e Timesheet API Server",
+  "main": "app.js",
+  "private": false,
+  "scripts": {
+    "dev": "nodemon app.js",
+    "start": "node app.js"
+  },
+  "engines": {
+    "node": "6.9.1"
+  },
+  "author": "Agilit-e",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "0.17.0",
+    "body-parser": "1.18.2",
+    "cors": "2.8.4",
+    "dotenv": "4.0.0",
+    "express": "4.16.2",
+    "helmet": "3.9.0",
+    "lodash": "4.17.4",
+    "moment": "2.19.1",
+    "mongoose": "4.12.4",
+    "nodemon": "1.12.1"
+  }
+}

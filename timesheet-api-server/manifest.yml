@@ -1,0 +1,6 @@
+---
+applications:
+ - name: Agilit-e Timesheet API Server
+   host: agilite-timesheet-api-server
+   random-route: true
+   memory: 256M
