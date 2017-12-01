@@ -1,3 +1,4 @@
+const timers = require('timers');
 const express = require('express');
 const helmet = require('helmet');
 const http = require('http');
@@ -6,6 +7,7 @@ const cors = require('cors');
 const Globals = require('./utils/globals');
 const Utils = require('./utils/utilities');
 const app = express();
+const oauth = require('./oauth');
 
 app.use(helmet());
 app.use(cors());
@@ -25,4 +27,10 @@ const server = http.createServer(app);
 
 server.listen(port, function() {
     console.log("Agilit-e Timesheet API Server listening on: ", port);
+    
+    //Generate OAuth every 30 minutes
+    timers.setInterval(function(){
+      oauth.run(); 
+    }, 1800000)
+    oauth.run();
 });
