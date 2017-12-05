@@ -24,11 +24,6 @@ var getObjectTemplate = function(templateType){
 var globals = {
   configLoaded:false,
   config:{},
-  actionCreate:"create",
-  actionUpdate:"update",
-  actionDelete:"delete",
-  statusError:"error",
-  statusSuccess:"success",
   getObjectTemplate:getObjectTemplate
 };
 

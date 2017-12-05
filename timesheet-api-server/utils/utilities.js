@@ -63,7 +63,6 @@ const loadConfig = function(callback){
   return null;
 };
 
-
 //PRIVATE FUNCTIONS
 exports.processApiResponse = processApiResponse;
 exports.loadConfig = loadConfig;

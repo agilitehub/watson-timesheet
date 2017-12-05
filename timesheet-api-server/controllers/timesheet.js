@@ -36,21 +36,19 @@ const getAll = function(req, res){
   return null;
 };
 
-const createRecord = function(req, res){
-  const dataTemplate = require("../data-templates/timesheet");
+const createRecordNative = function(data, callback){
+  _createRecordExtended(data, function(err, result) {
+    callback(err, result);
+  });
 
+  return null;
+}
+
+const createRecord = function(req, res){
   let apiResult = JSON.parse(JSON.stringify(generalTemplate.apiResult));
-  let authDb = null;
-  let Schema = null;
   let data = {};
-  let entry = {};
-  let model = {};
-  let customObject = null;
 
   try{
-    authDb = dbCon.getDbConnection(Enums.DB_TIMESHEET);
-    Schema = authDb.model(Enums.MODEL_TIMESHEET, templateSchema);
-
     //Get Data from Request
     data = req.body;
 
@@ -64,27 +62,13 @@ const createRecord = function(req, res){
       return Utils.processApiResponse(req, res, apiResult);
     }
 
-    entry = JSON.parse(JSON.stringify(dataTemplate.core));
-
-    entry.createdBy = data.data.user;
-    entry.modifiedBy = data.data.user;
-    entry.data = data.data;
-
-    model = new Schema(entry);
-
-    Schema.create(model, function(err, record) {
+    _createRecordExtended(data.data, function(err, result) {
       if(err){
         apiResult.statusCode = 400;
         apiResult.messages.push(err);
       }else{
-        entry = record;
-        apiResult.data = entry;
+        apiResult.data = result;
       }
-
-      //Nullify Objects
-      authDb = null;
-      Schema = null;
-      model = null;
 
       Utils.processApiResponse(req, res, apiResult);
     });
@@ -97,5 +81,42 @@ const createRecord = function(req, res){
   return null;
 };
 
+//PRIVATE FUNCTIONS
+const _createRecordExtended = function(data, callback){
+  const dataTemplate = require("../data-templates/timesheet");  
+
+  let authDb = null;
+  let Schema = null;
+  let entry = {};
+  let model = {};
+
+  try {
+    authDb = dbCon.getDbConnection(Enums.DB_TIMESHEET);
+    Schema = authDb.model(Enums.MODEL_TIMESHEET, templateSchema);    
+    entry = JSON.parse(JSON.stringify(dataTemplate.core));
+    
+    entry.createdBy = data.username;
+    entry.modifiedBy = data.username;
+    entry.data = data;
+  
+    model = new Schema(entry);
+
+    Schema.create(model, function(err, result) {
+      //Nullify Objects
+      authDb = null;
+      Schema = null;
+      model = null;
+
+      callback(err, result);
+    });
+
+  } catch (e) {
+    callback(e.stack, null);
+  }
+
+  return null;
+}
+
 exports.getAll = getAll;
 exports.createRecord = createRecord;
+exports.createRecordNative = createRecordNative;

@@ -4,3 +4,5 @@ applications:
    host: agilite-timesheet-api-server
    random-route: true
    memory: 256M
+   services:
+    - jardin-home-ai-watson-conversation

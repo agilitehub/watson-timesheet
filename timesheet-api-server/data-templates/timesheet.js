@@ -9,8 +9,9 @@ var data = {
     client:"",
     typeOfWork:"",
     hoursSpent:0,
-    isBillable:false,
-    description:""
+    hoursBilled:0,
+    description:"",
+    wwUserId:""
 };
 
 exports.core = core;

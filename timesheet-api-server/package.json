@@ -27,6 +27,7 @@
     "moment": "2.19.1",
     "mongoose": "4.12.4",
     "nodemon": "1.12.1",
-    "request": "2.83.0"
+    "request": "2.83.0",
+    "watson-developer-cloud": "2.42.0"
   }
 }
