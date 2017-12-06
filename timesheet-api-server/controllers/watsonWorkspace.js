@@ -10,13 +10,14 @@ const execute = function(req, res){
   let isValidRequest = false;
   let msg = "";
   let spaceId = "";
-  let responseTitle = "";
+  let responseTitle = "General";
   let responseMessage = "";
   let wcData = {};
   let cacheContext = null;
-  let actionType = "";
+  let performAction = "";
   let saveContext = false;
-  let deleteContext = false;
+  let sendMessage = true;
+  let workflowStep = "0";
 
   try {
     //Is Watson Workspace submitting a challenge or a user request?
@@ -31,9 +32,9 @@ const execute = function(req, res){
       if(req.body.type !== 'message-created' || req.body.userId === process.env.APP_ID || req.body.content === "")
         return null;
 
-      msg = req.body.content;
+      msg = req.body.content.replace(new RegExp("\n", 'g'), " ");
       spaceId = req.body.spaceId;
-      cacheContext = cache.get(Enums.CACHE_CONTEXT + req.body.userId);
+      cacheContext = cache.get(spaceId + req.body.userId);
 
       //Next: We need to handle the message from the user and check if it's a valid request
       if(cacheContext){
@@ -51,114 +52,92 @@ const execute = function(req, res){
       }
 
       if(isValidRequest){
-        var conversation = new ConversationV1({
-          headers: {"X-Watson-Learning-Opt-Out": true},          
-          version_date: ConversationV1.VERSION_DATE_2017_05_26
-        });
-
-        wcData = {
-          input: {text: msg},
-          workspace_id: Globals.config.wcWorkspaceId,
-          context:{
-            username:req.body.userName
-          }
-        };
+        var conversation = new ConversationV1({headers: {"X-Watson-Learning-Opt-Out": true}, version_date: ConversationV1.VERSION_DATE_2017_05_26});
+        wcData = {input: {text: msg}, workspace_id: Globals.config.wcWorkspaceId, context:{username:req.body.userName}};
 
         if(cacheContext)
           wcData.context = cacheContext;
 
         console.log("Sending Message to Watson Conversation Workspace:");
-        console.log(wcData);
+        console.log(msg);
 
         conversation.message(wcData, function(err, response) {
             if (err) {
-              responseTitle = "Unsuccessful";
-              responseMessage = "Apologies. Something went wront with the conversation service. Please wait a few minutes and try again?";
-              deleteContext = true;
-
               console.error("WC Error Occurred");
               console.error(err);
-            } else {
-              console.log("--START WC RESPONSE--");
-              console.log(response);
-              console.log("--END WC RESPONSE--");
+
+              responseTitle = "Unsuccessful";
+              responseMessage = "Apologies. Something went wront with the conversation service. Please wait a moment and try again?";
+              _send(spaceId, responseTitle, responseMessage); 
+              return null;
+            }
+
+            console.log("--START WC RESPONSE--");
+            console.log(response);
+            console.log("--END WC RESPONSE--");
               
-              cacheContext = response.context;
-              responseMessage = response.output.text[0];     
+            cacheContext = response.context;
 
-              //Determine Response Title
-              //TODO: We need to fix this. Maybe add a variable in the context called messageTitle
-              if(response.intents.length > 0){
-                switch(response.intents[0].intent){
-                  case "greeting":
-                    responseTitle = "General Conversation";
+            if(response.output.text.length > 0){
+              responseMessage = response.output.text[0].replace(new RegExp("{{new_line}}", 'g'), "\n");
+            }
+
+            responseTitle = cacheContext.responseTitle ? cacheContext.responseTitle : responseTitle;
+            workflowStep = cacheContext.workflowStep ? cacheContext.workflowStep : workflowStep;
+            performAction = cacheContext.performAction ? cacheContext.performAction : performAction;
+
+            //Use Workflow Step to determine next action
+            switch (cacheContext.workflowStep) {
+              case "0":
+                //Irrelevant - Context must not be saved
+                break;
+              case "1.4"://Timesheet Actions Required
+                switch (performAction) {
+                  case Enums.ACTION_CONFIRM_TIMESHEET:
+                    saveContext = true;
+
+                    if(!cacheContext.hoursBilled)
+                      cacheContext.hoursBilled = 0;
+
+                    responseMessage += "\n*Date:* " + cacheContext.date;
+                    responseMessage += "\n*Client:* " + cacheContext.client;
+                    responseMessage += "\n*Type Of Work:* " + cacheContext.typeOfWork;
+                    responseMessage += "\n*Hours Spent:* " + cacheContext.hoursSpent;
+                    responseMessage += "\n*Hours Billed:* " + cacheContext.hoursBilled;
+                    responseMessage += "\n*Description:* " + cacheContext.description;                    
                     break;
-                  default:
-                    responseTitle = "New Timesheet";
+                  case Enums.ACTION_SUBMIT_TIMESHEET:
+                    sendMessage = false;
+                    cacheContext.wwUserId = req.body.userId;
+
+                    Timesheet.createRecordNative(cacheContext, function(err, result){
+                      if(err){
+                        responseTitle = "Timesheet Submission Failed";
+                        responseMessage = "Apologies. Something went wrong with submitting the Timesheet. Please start over";
+                      }else{
+                        responseTitle = "New Timesheet";
+                        responseMessage = "Timesheet successfully submitted 👍";
+                      }
+
+                      _send(spaceId, responseTitle, responseMessage);
+                    });       
+                  break;                  
                 }
-              }else{
-                responseTitle = "New Timesheet";
-              }
 
-              //Check if context needs to be stored or deleted
-              if(cacheContext.conversationComplete){
-                deleteContext = true;
-              }else{
+                break;
+              default:
                 saveContext = true;
-              }
-
-              //Check what actions need to be performed
-              if(cacheContext.performAction){
-                actionType = cacheContext.performAction;
-              }
-
-              switch(actionType){
-                case Enums.ACTION_SUBMIT_TIMESHEET:
-                  cacheContext.wwUserId = req.body.userId;
-                  cacheContext.username = req.body.userName;
-
-                  //TODO: Add WW username to context, just in case it's not there
-                  Timesheet.createRecordNative(cacheContext, function(err, result){
-                    if(err){
-                      responseTitle = "Timesheet Submission Failed";
-                      responseMessage = "Apologies. Something went wrong";
-                    }else{
-                      responseTitle = "Success";
-                      responseMessage = "Timesheet successfully submitted 👍";
-                    }
-
-                    _send(spaceId, responseTitle, responseMessage);
-                  });       
-                  break;
-                case Enums.ACTION_CONFIRM_TIMESHEET:
-                  responseTitle = "Confirm Timesheet";
-
-                  if(!cacheContext.hoursBilled)
-                    cacheContext.hoursBilled = 0;
-
-                  responseMessage += "\n*Date:* `" + cacheContext.date + "`";
-                  responseMessage += "\n*Client:* `" + cacheContext.client + "`";
-                  responseMessage += "\n*Type Of Work:* `" + cacheContext.typeOfWork + "`";
-                  responseMessage += "\n*Hours Spent:* `" + cacheContext.hoursSpent + "`";
-                  responseMessage += "\n*Hours Billed:* `" + cacheContext.hoursBilled + "`";
-                  responseMessage += "\n*Description:* `" + cacheContext.description + "`";
-                  break;
-              } 
             }
 
-            //Check if Context needs to be cached
             if(saveContext){
-              //TODO: Add WW username before saving
-              cache.put(Enums.CACHE_CONTEXT + req.body.userId, cacheContext);
-            }else if(deleteContext){
-              cache.del(Enums.CACHE_CONTEXT + req.body.userId);
+              cache.put(spaceId + req.body.userId, cacheContext, Enums.CACHE_TIMEOUT);
+            }else{
+              cache.del(spaceId + req.body.userId);
             }
-            
-            //Submit the Response to the User
-            console.log("Response Title = " + responseTitle);
-            console.log("Response = " + responseMessage);
 
-            _send(spaceId, responseTitle, responseMessage);     
+            if(sendMessage){
+              _send(spaceId, responseTitle, responseMessage);  
+            }   
         });
       }
     }
@@ -190,7 +169,7 @@ const _send = (spaceId, responseTitle, responseMessage) => {
         annotations: [{
           type: 'generic',
           version: 1.0,
-          color: '#b01724',
+          color: '#ffa4a2',
           title: responseTitle,
           text: responseMessage,
           actor: {
